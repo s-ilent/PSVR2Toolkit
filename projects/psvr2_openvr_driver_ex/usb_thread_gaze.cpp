@@ -5,6 +5,26 @@
 #include "hmd2_gaze.h"
 #include "ipc_server.h"
 
+#include "gaze_calibration.h"
+
+#include "util.h"
+
+namespace {
+    GazeCalibrationProfile g_leftEyeCalibration;
+    GazeCalibrationProfile g_rightEyeCalibration;
+    bool g_calibrationLoaded = false;
+
+    void LoadCalibrationProfiles()
+    {
+        if (g_calibrationLoaded) return;
+
+        g_leftEyeCalibration.LoadConfig("LeftEye");
+        g_rightEyeCalibration.LoadConfig("RightEye");
+
+        g_calibrationLoaded = true;
+    }
+}
+
 #include <cstdlib>
 
 #include <winusb.h>
@@ -123,6 +143,7 @@ uint8_t CaesarUsbThreadGaze::getReadPipeId() {
 
 int CaesarUsbThreadGaze::poll() {
   static IpcServer *pIpcServer = IpcServer::Instance();
+  LoadCalibrationProfiles();
 
   static char buffer[0x200000];
   int result = CaesarUsbThread__read(this, 0x85, buffer, sizeof(buffer));
@@ -131,9 +152,24 @@ int CaesarUsbThreadGaze::poll() {
   }
 
   if (buffer[0] == GAZE_MAGIC_0 && buffer[1] == GAZE_MAGIC_1_STATE) {
-    Hmd2GazeState *pGazeState = reinterpret_cast<Hmd2GazeState *>(buffer);
-    HmdDeviceHooks::UpdateGaze(pGazeState, sizeof(Hmd2GazeState));
-    pIpcServer->UpdateGazeState(pGazeState);
+
+    Hmd2GazeState* pGazeState = reinterpret_cast<Hmd2GazeState*>(buffer);
+    Hmd2GazeState calibratedGazeState = *pGazeState;
+
+    if (calibratedGazeState.leftEye.isGazeDirValid) {
+        calibratedGazeState.leftEye.gazeDirNorm = g_leftEyeCalibration.Remap(
+            pGazeState->leftEye.gazeDirNorm
+        );
+    }
+
+    if (calibratedGazeState.rightEye.isGazeDirValid) {
+        calibratedGazeState.rightEye.gazeDirNorm = g_rightEyeCalibration.Remap(
+            pGazeState->rightEye.gazeDirNorm
+        );
+    }
+
+    HmdDeviceHooks::UpdateGaze(&calibratedGazeState, sizeof(Hmd2GazeState));
+    pIpcServer->UpdateGazeState(&calibratedGazeState);
   }
 
   return 0;
