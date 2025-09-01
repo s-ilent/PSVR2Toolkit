@@ -38,6 +38,31 @@ namespace psvr2_toolkit {
       return value;
     }
 
+    static float GetFloat(const char* pchSettingsKey, float defaultValue)
+    {
+        vr::EVRSettingsError error;
+        float value = vr::VRSettings()->GetFloat(STEAMVR_SETTINGS_SECTION_PLAYSTATION_VR2_EX, pchSettingsKey, &error);
+        if (error != vr::EVRSettingsError::VRSettingsError_None)
+        {
+            value = defaultValue;
+        }
+        return value;
+    }
+
+    static std::string GetString(const char* pchSettingsKey, const std::string& defaultValue)
+    {
+        vr::EVRSettingsError error;
+        char buffer[1024];
+        vr::VRSettings()->GetString(STEAMVR_SETTINGS_SECTION_PLAYSTATION_VR2_EX, pchSettingsKey, buffer, sizeof(buffer), &error);
+
+        if (error != vr::EVRSettingsError::VRSettingsError_None)
+        {
+            return defaultValue;
+        }
+
+        return std::string(buffer);
+    }
+
   };
 
 } // psvr2_toolkit
